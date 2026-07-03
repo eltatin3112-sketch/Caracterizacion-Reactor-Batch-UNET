@@ -1,152 +1,325 @@
-Reactor Batch Automatizado: Caracterización de Mezcla Homogénea y Dinámica Térmica
-1. Objetivo del Proyecto
-Este proyecto tiene como finalidad la caracterización experimental de un Reactor Batch de escala industrial para la preparación de soluciones térmicas. El enfoque principal es cuantificar el acoplamiento entre la agitación mecánica (subsistema motorreductor) y la transferencia de calor (subsistema térmico).
-El objetivo técnico es obtener los parámetros dinámicos del proceso (Ganancia, Constante de tiempo y Retardo) bajo diferentes regímenes de mezcla, permitiendo construir un modelo matemático fiel que sirva de base para el diseño de un controlador PID robusto.
-1.1. Justificación en Sistemas de Control II
-A diferencia de un calentamiento estático, este proyecto analiza cómo el transporte de masa (agitación) altera la eficiencia térmica. Se busca identificar:
-La relación PWM-RPM del agitador y su zona muerta.
-La mejora en la constante de tiempo térmica (tau) mediante convección forzada.
-La reducción del tiempo muerto (theta) por homogeneización del fluido.
-2. Componentes Utilizados
-Para garantizar la precisión en la identificación de las variables, se ha seleccionado el siguiente hardware:
-Unidad de Control: ESP32 DevKit V1 (Soporte nativo para interrupciones y PWM de alta resolución).
-Subsistema Térmico: Resistencia de inmersión de 110V AC y Relé de Estado Sólido (SSR-50 DA).
-Subsistema Mecánico: Motorreductor TT de 12V con hélice de agitación y Driver L298N.
-Sensórica de Retroalimentación:
-Sensor de temperatura digital DS18B20 (Bus One-Wire).
-Encoder óptico FC-03 con disco de 20 ranuras (Medición de velocidad).
-Alimentación: Fuente de poder ATX de PC (Rieles de 5V y 12V) y red eléctrica de 110V AC para el calefactor.
-3. Advertencias Eléctricas (Seguridad Crítica)
-PELIGRO DE ALTO VOLTAJE: El subsistema térmico opera con 110V AC. Bajo ninguna circunstancia se debe manipular el cableado de la resistencia o del SSR mientras el sistema esté energizado.
-Aislamiento Galvánico: Se debe verificar que el Relé de Estado Sólido (SSR) proporcione aislamiento total entre el circuito de control (ESP32) y la red de 110V.
-Voltajes Lógicos: Alimentar el sensor de temperatura DS18B20 y el encoder FC-03 estrictamente con 3.3V desde el pin 3V3 del ESP32. No conectarlos a 5V para evitar daños irreversibles en los pines GPIO.
-Tierra Común (GND): Es obligatorio unificar el GND de la fuente ATX con el GND del ESP32 y el borne GND del driver L298N. Sin esta referencia común, el sensor de velocidad y las señales PWM presentarán inestabilidad.
-Gestión Térmica: El MOSFET interno del L298N y el SSR pueden generar calor considerable bajo carga. Se recomienda el uso de disipadores de calor para pruebas de larga duración (>10 min).
-Protección de Motores: Instalar un capacitor cerámico de 100nF entre los terminales del motor TT para filtrar el ruido electromagnético que podría afectar la red One-Wire del sensor de temperatura.
-4. Tabla de Conexiones Propuesta
-Pines definidos en el firmware para la placa ESP32 DevKit V1:
-Origen (ESP32)	Pin / Señal	Destino	Notas
-ESP32 GPIO25	D25	L298N ENA	Control de velocidad PWM Agitador
-ESP32 GPIO26	D26	L298N IN1	Dirección de giro Agitador
-ESP32 GPIO27	D27	L298N IN2	Dirección de giro Agitador
-ESP32 GPIO33	D33	FC-03 D0	Entrada de pulsos (Encoder)
-ESP32 GPIO4	D4	DS18B20 Data	Bus de datos Temperatura (Requiere Pull-up)
-ESP32 GPIO18	D18	SSR Terminal 3 (+)	Mando del calefactor (Control PID)
-ESP32 VIN	5V	Fuente ATX 5V	Alimentación de lógica (Cable Rojo)
-ESP32 3V3	3.3V	VCC Sensores	Alimentación DS18B20 y FC-03
-Fuente ATX 12V	12V	L298N VCC	Alimentación motor (Cable Amarillo)
-Conexiones Prohibidas o No Recomendadas:
-No conectar la resistencia de 110V directamente al ESP32 o al L298N.
-No omitir la resistencia de pull-up (4.7k - 10k) en la línea de datos del sensor DS18B20.
-No alimentar el motor TT desde el pin 3V3 del ESP32; la demanda de corriente causará el reinicio del controlador.
-No alimentar el ESP32 con 12V por el pin VIN.
-5. Estructura del Proyecto
-El firmware está desarrollado bajo el entorno PlatformIO utilizando el framework de Arduino, lo que permite una gestión modular del código. La organización de archivos en el repositorio es la siguiente:
-platformio.ini: Archivo de configuración del proyecto, definición de placa (esp32dev) y gestión de librerías.
-src/main.cpp: Código fuente principal que contiene la máquina de estados para la caracterización.
-include/config.h: Definición de constantes, pines de hardware y parámetros de red (WiFi/mDNS).
-data/: Carpeta para el sistema de archivos LittleFS que aloja la interfaz web (HTML/JS) para la visualización de datos.
-docs/: Contiene el Diagrama de Proceso (P&ID) y el esquema de conexiones detallado.
-data/results.json: Archivo generado automáticamente donde se persisten los datos de las pruebas experimentales.
-6. Librerías y Dependencias
-Para el funcionamiento correcto del caracterizador, se han integrado las siguientes bibliotecas:
-OneWire & DallasTemperature: Para la gestión del bus de datos y lectura del sensor digital DS18B20.
-PID_v1: Implementación del algoritmo de control para el lazo térmico (utilizado en la fase de sostenimiento).
-LittleFS: Para la gestión de almacenamiento de datos en la memoria flash del ESP32.
-ESPAsyncWebServer: Para servir la interfaz de monitoreo inalámbrico en tiempo real.
-ArduinoJson: Para la estructuración y exportación de los datos obtenidos en formato compatible con Excel/MATLAB.
-7. Instrucciones de Compilación y Carga (PlatformIO)
-Para reproducir el entorno de desarrollo, siga estos pasos en la terminal:
-Compilar el código fuente:
-code
-Bash
-pio run
-Subir el firmware al ESP32:
-code
-Bash
-pio run --target upload
-Subir la interfaz web (Sistema de archivos LittleFS):
-code
-Bash
-pio run --target uploadfs
-Abrir el monitor serie para validar inicialización:
-code
-Bash
-pio device monitor --baud 115200
-Una vez cargado, el ESP32 anunciará su presencia en la red local mediante el protocolo mDNS, permitiendo el acceso a través de: http://reactor-batch.local o la dirección IP mostrada por el puerto serie.
-8. Flujo de Calibración y Pruebas Manuales
-Antes de iniciar la caracterización automática, se deben validar los límites operativos del hardware para garantizar la seguridad del recipiente de polímero:
-8.1. Validación Mecánica del Agitador
-Prueba de Giro: Ingresar un PWM de prueba (ej. 100) y verificar el sentido de giro. El fluido debe desplazarse hacia abajo para optimizar la mezcla.
-Determinación de RPM Máximas: Llevar el motor al PWM 255 y verificar con el encoder que la velocidad sea estable y no genere salpicaduras excesivas fuera del reactor.
-Identificación de Zona Muerta: Incrementar el PWM lentamente hasta que el agitador venza la fricción estática del agua. Este valor será registrado como pwm_min_arranque.
-8.2. Validación de Seguridad Térmica
-Prueba de Sensor: Verificar que la lectura del DS18B20 sea coherente con la temperatura ambiente.
-Prueba de SSR: Realizar una activación manual breve (2 segundos) y observar el encendido del LED indicador del SSR y el incremento leve en la temperatura para validar el aislamiento galvánico.
-9. Ejecución de la Caracterización Automática
-El proceso de identificación experimental se divide en dos protocolos principales ejecutados por la máquina de estados del firmware:
-9.1. Caracterización Mecánica (PWM vs RPM)
-El sistema ejecutará cuatro rampas secuenciales para identificar el comportamiento dinámico del motorreductor bajo la carga del fluido:
-Rampa Ascendente Adelante: Identifica el PWM de arranque.
-Rampa Descendente Adelante: Identifica el PWM de sostenimiento y la histéresis mecánica.
-Rampa Ascendente Atrás: Detecta asimetrías mecánicas en el motor.
-Rampa Descendente Atrás: Finalización del ensayo mecánico.
-9.2. Caracterización Térmica (Curva de Reacción)
-Se realizarán pruebas de escalón (Step Response) para obtener los parámetros del modelo de primer orden con tiempo muerto (FOPDT). El experimento se repetirá bajo tres condiciones de mezcla:
-Prueba A (Estática): Agitador al 0%. Se inyecta potencia a la resistencia y se registra la curva de temperatura.
-Prueba B (Mezcla Media): Agitador al 50% de velocidad. Se analiza la reducción en la constante de tiempo (tau).
-Prueba C (Mezcla Máxima): Agitador al 100% de velocidad. Se busca el retardo de transporte (theta) mínimo.
-Criterio de Parada: Por seguridad del recipiente, toda prueba se detendrá automáticamente al alcanzar los 55 grados Celsius o tras un tiempo máximo de 15 minutos (timeout).
-10. Gestión y Exportación de Resultados
-Al finalizar los ensayos, el ESP32 procesará el archivo results.json alojado en LittleFS. El usuario podrá:
-Visualizar la gráfica en tiempo real mediante la interfaz web (Chart.js).
-Descargar el archivo XLSX para realizar el cálculo de parámetros dinámicos en Excel o MATLAB.
-Validar la metadata del ensayo para asegurar que las condiciones de carga (volumen de agua) fueron constantes en todas las pruebas.
-11. INTERPRETACIÓN DE RESULTADOS EXPERIMENTALES
-Tras la ejecución de los protocolos de caracterización, el sistema permite identificar los parámetros clave para el diseño de los lazos de control:
-11.1. Análisis del Agitador (Mecánico)
-PWM Mínimo de Arranque: Representa el valor del ciclo de trabajo necesario para vencer el torque de fricción estática del motorreductor bajo la carga del fluido. Identificar este punto es vital para evitar el zumbido del motor sin rotación efectiva.
-Histéresis Mecánica: Se determina comparando las rampas ascendentes y descendentes. Una diferencia significativa indica holguras en la caja reductora del motor TT o efectos de inercia del fluido que deben ser compensados por software.
-Linealidad RPM vs PWM: Permite validar si la velocidad de agitación responde de forma lineal a la señal de mando, facilitando un control de velocidad posterior.
-11.2. Análisis Térmico (Modelo FOPDT)
-Mediante el método de la curva de reacción, se estiman los parámetros del modelo de Primer Orden con Tiempo Muerto para cada régimen de agitación:
-Ganancia del Proceso (K): Relación entre el incremento de temperatura y el porcentaje de potencia inyectada.
-Constante de Tiempo (tau): Tiempo requerido para que el fluido alcance el 63.2 por ciento de su variación total. Se espera que tau disminuya al aumentar la velocidad de agitación.
-Tiempo Muerto (theta): El retraso entre la activación de la resistencia y la detección del cambio por el sensor DS18B20. Este valor se reduce al homogeneizar el fluido mediante agitación.
-12. ANÁLISIS DE NO LINEALIDADES Y LIMITACIONES
-El reactor batch presenta comportamientos no ideales que han sido cuantificados durante la caracterización:
-Zona Muerta: Presente en el agitador (PWM menor a 40 aproximadamente) y en el sistema térmico debido a la inercia inicial de la resistencia.
-Saturación: El sistema térmico encuentra un límite superior definido por el equilibrio entre la potencia de la resistencia y las pérdidas térmicas del recipiente hacia el ambiente.
-Retardo de Transporte: Influenciado directamente por la posición física del sensor DS18B20 respecto a la resistencia de inmersión.
-13. RELACIÓN CON EL MODELO EN ASPEN HYSYS V14
-La caracterización física permite retroalimentar el modelo desarrollado en HYSYS bajo las siguientes premisas:
-Ajuste del Coeficiente de Transferencia (U): Los datos experimentales de calentamiento bajo agitación permiten ajustar el valor del coeficiente global de transferencia de calor en el bloque Vessel de HYSYS para que la simulación dinámica sea fiel a la realidad.
-Validación de Pérdidas de Calor (Heat Loss): La diferencia entre la curva ideal de HYSYS y la curva real medida identifica el flujo de calor perdido hacia el entorno, parámetro que se ingresa en el simulador para mejorar su capacidad de predicción.
-Sintonía Pre-experimental: Las constantes dinámicas halladas (tau y theta) se cargan en el bloque TIC-100 de HYSYS para obtener sintonías preliminares de Kp, Ki y Kd, reduciendo el riesgo de errores térmicos en el prototipo físico.
-14. REPRODUCIBILIDAD DEL PROYECTO DESDE CERO
-Para replicar el entorno de caracterización del reactor batch, siga estos pasos:
-Clonar el repositorio: Realice una copia local del proyecto desde GitHub.
-Configuración de Credenciales: Cree un archivo include/config.h (basado en la plantilla proporcionada) e ingrese las credenciales de su red WiFi local.
-Entorno de Desarrollo: Abra el proyecto en Visual Studio Code con la extensión PlatformIO instalada.
-Preparación de Librerías: El archivo platformio.ini descargará automáticamente las dependencias (OneWire, DallasTemperature, ArduinoJson, etc.).
-Compilación y Carga:
-Ejecute el comando 'pio run' para compilar el firmware.
-Use 'pio run --target upload' para subir el código al ESP32.
-Use 'pio run --target uploadfs' para cargar la interfaz web y las librerías de gráficas al sistema de archivos LittleFS.
-Validación: Abra el monitor serie a 115200 baudios para verificar la dirección IP asignada y el estado de los sensores.
-15. MANTENIBILIDAD DEL CÓDIGO
-El firmware se ha organizado siguiendo una arquitectura modular por bloques funcionales para facilitar futuras mejoras:
-Bloque de Comunicación: Gestión de WiFi y protocolo mDNS para acceso por nombre (reactor-batch.local).
-Servidor Web Asíncrono: Manejo de la interfaz de usuario y peticiones de datos en tiempo real.
-Control de Actuadores: Implementación de señales PWM mediante el periférico LEDC del ESP32 para el motor TT y la resistencia.
-Bus de Datos Digital: Lógica de lectura para el sensor DS18B20 y conteo de pulsos del encoder por interrupciones.
-Máquina de Estados: Lógica central que gobierna las rampas de caracterización y las pruebas térmicas.
-Persistencia de Datos: Gestión de archivos JSON en LittleFS para asegurar que los resultados no se pierdan ante reinicios del controlador.
-16. CONCLUSIONES TÉCNICAS
-El proceso de identificación experimental ha permitido obtener una base de datos sólida para modelar la dinámica multivariable del reactor farmacéutico.
-Se ha validado cuantitativamente que la agitación mecánica es un factor determinante en la reducción del tiempo muerto y la constante de tiempo del sistema térmico, optimizando la homogeneidad de la mezcla.
-La integración del ESP32 como estación de telemetría facilita la captura de datos de alta resolución, superando las limitaciones de los métodos de recolección manual.
-El contraste entre los datos reales obtenidos y el modelo dinámico en Aspen HYSYS garantiza que el diseño final del controlador PID sea robusto y se adapte a las no linealidades físicas del prototipo construido.
-Universidad Nacional Experimental del Táchira (UNET) - 2024
-Departamento de Ingeniería Electrónica
-Sistemas de Control II
+# CARACTERIZADOR DINAMICO: REACTOR BATCH G5
+## Identificacion Experimental de Mezcla y Transferencia Termica
+
+---
+
+### 1. OBJETIVO DEL PROYECTO
+Este proyecto utiliza un microcontrolador ESP32 DevKit V1 con PlatformIO para la caracterizacion experimental de un reactor batch farmaceutico a escala. El objetivo principal es identificar la relacion dinamica entre el subsistema de agitacion mecanica y la respuesta termica del fluido.
+
+A traves de ensayos de escalon, se busca cuantificar como la velocidad de mezcla (RPM) influye en la homogeneidad del fluido y altera los parametros del modelo FOPDT (Ganancia, Constante de Tiempo y Retardo). Esta fase es crucial para obtener datos reales que permitan sintonizar un controlador PID robusto, capaz de compensar las ineficiencias termicas y las perdidas de calor ambientales identificadas durante las pruebas.
+
+---
+
+### COMPONENTES USADOS
+* **Microcontrolador:** ESP32 DevKit V1 (Nucleo de procesamiento y telemetria).
+* **Subsistema de Agitacion:** Motorreductor TT de 12V con helice de alambre personalizada.
+* **Etapa de Calentamiento:** Resistencia de inmersion de 110V AC gestionada por Rele de Estado Solido (SSR-50 DA).
+* **Driver de Motores:** Puente H L298N (Gestion de PWM para el agitador).
+* **Sensor de Temperatura:** Digital DS18B20 con encapsulado sumergible de acero inoxidable.
+* **Sensor de Velocidad:** Encoder infrarrojo FC-03 con disco de 20 ranuras.
+* **Suministro Electrico:** Fuente de poder ATX reciclada (Rieles de 5V y 12V DC).
+* **Recipiente de Proceso:** Jarra de polimero de 3.5 Litros (Carga operativa de 1 a 3 litros).
+
+---
+
+###  2. ADVERTENCIAS ELECTRICAS Y DE SEGURIDAD
+
+* **PELIGRO DE ALTO VOLTAJE:** El sistema maneja 110V AC para la resistencia. No manipular el cableado del SSR ni de la resistencia mientras el equipo este conectado a la red electrica.
+* **PROTECCION DE LA PLACA:** Alimentar el ESP32 estrictamente con 5V por el pin VIN desde la fuente ATX. No utilizar el pin de 3.3V como entrada de energia.
+* **SENSORES Y LOGICA:** Los sensores DS18B20 y FC-03 operan a 3.3V. No conectarlos al riel de 5V o a los 12V de los motores para evitar daños en los pines GPIO.
+* **TIERRA COMUN:** Es obligatorio unir el cable negro (GND) de la fuente ATX con el pin GND del ESP32 y el borne GND del L298N. La falta de una referencia comun provocara lecturas erroneas en el encoder.
+* **RESISTENCIA PULL-UP:** El sensor de temperatura requiere una resistencia de 4.7k o 10k Ohmios entre el cable de datos y los 3.3V para un funcionamiento correcto del bus One-Wire.
+* **SEGURIDAD TERMICA:** No activar la resistencia de inmersion fuera del agua. El componente puede alcanzar temperaturas de fusion en segundos y causar daños estructurales al reactor o quemaduras al operador.
+* **RUIDO INDUCTIVO:** Se recomienda instalar un capacitor de 100nF en los terminales del motor TT para evitar interferencias que bloqueen la comunicacion digital de los sensores.
+---
+
+### 3. TABLA DE CONEXIONES Y PINOUT
+Pines asignados en el firmware para el controlador **ESP32 DevKit V1**:
+
+* `GPIO 25` -> `L298N_ENA` (PWM Agitador)
+* `GPIO 26` -> `L298N_IN1` (Dirección Agitador)
+* `GPIO 27` -> `L298N_IN2` (Dirección Agitador)
+* `GPIO 33` -> `ENCODER_D0` (Interrupción RPM)
+* `GPIO 04` -> `DS18B20_DATA` (Bus One-Wire Temperatura)
+* `GPIO 18` -> `SSR_CONTROL` (Disparo del Calefactor)
+* `GPIO 21` -> `LCD_SDA` (Interfaz I2C)
+* `GPIO 22` -> `LCD_SCL` (Interfaz I2C)
+
+#### Matriz Mínima de Cableado
+
+| Conexión Origen | Señal / Pin | Destino Hardware | Notas Técnicas |
+| :--- | :--- | :--- | :--- |
+| **Fuente ATX** | `+5V` (Rojo) | ESP32 `VIN` | Alimentación de lógica de control |
+| **Fuente ATX** | `+12V` (Amarillo) | L298N `VCC` | Potencia para el motor TT |
+| **Fuente ATX** | `GND` (Negro) | **GND COMÚN** | Unión de todas las tierras del sistema |
+| **ESP32** | `3V3` | `VCC` Sensores | Alimentación para FC-03 y DS18B20 |
+| **ESP32** | `GPIO 25` | L298N `ENA` | Requiere remoción de jumper en driver |
+| **ESP32** | `GPIO 18` | SSR `Pin 3 (+)` | Mando DC para etapa de 110V AC |
+| **L298N** | `OUT1 / OUT2`| Motor TT | Conexión directa a bornes del motor |
+| **Enchufe 110V**| `Fase` | SSR `Pin 1` | Interrupción de potencia AC |
+
+---
+
+### 4. CONEXIONES PROHIBIDAS O NO RECOMENDADAS
+
+> [!CAUTION]
+> **SEGURIDAD ELÉCTRICA Y ELECTRÓNICA**
+> * **NO** alimentar el encoder FC-03 con 5V si se conecta al ESP32 (usar estrictamente 3.3V).
+> * **NO** conectar la resistencia de 110V AC directamente al ESP32 o a la protoboard.
+> * **NO** omitir el nodo de tierra común (GND) entre la fuente ATX y el ESP32.
+> * **NO** encender la resistencia de inmersión si el sensor ultrasónico indica bajo nivel de fluido.
+> * **NO** utilizar los pines GPIO 6 al 11, ya que están integrados a la memoria flash del ESP32.
+
+---
+
+### 5. CONFIGURACIÓN WIFI Y TELEMETRÍA
+
+El sistema utiliza un servidor web asíncrono para la captura de datos. Las credenciales se gestionan en un archivo independiente para seguridad.
+
+**Archivo:** `include/config.h` (Excluido por `.gitignore`)
+
+*   **AP_SSID:** "Reactor_Batch_G5"
+*   **AP_PASSWORD:** "control_industrial"
+*   **IP Estática:** `192.168.4.1`
+
+---
+
+### 6. ESTRUCTURA DEL PROYECTO
+
+Organización de archivos bajo el estándar de **PlatformIO**:
+
+*   **platformio.ini**: Configuración de dependencias y entorno.
+*   **src/main.cpp**: Lógica central, algoritmo PID y servidor web.
+*   **include/config.h**: Definición de pines y credenciales de red.
+*   **data/index.html**: Interfaz gráfica del usuario (HMI).
+*   **data/app.js**: Lógica de gráficas y telemetría en JavaScript.
+*   **data/style.css**: Diseño visual del panel de control.
+*   **data/xlsx.full.min.js**: Librería local para exportación a Excel.
+*   **data/chart.umd.min.js**: Librería local para gráficas offline.
+
+---
+
+### 7. INSTRUCCIONES DE DESARROLLO
+
+Siga esta secuencia de comandos en la terminal de VS Code para cargar el sistema:
+
+1. **Compilar el código fuente:** `pio run`
+2. **Subir el Firmware al ESP32:** `pio run --target upload`
+3. **Subir Interfaz Web (LittleFS):** `pio run --target uploadfs`
+4. **Abrir Monitor Serial:** `pio device monitor --baud 115200`
+
+---
+
+### 8. VALIDACIÓN DE LIBRERÍAS LOCALES
+
+Para asegurar el funcionamiento en entornos industriales sin internet, las librerías se alojan en la memoria flash. Al abrir el HMI, verifique el estado en la sección de diagnóstico:
+
+*   **Chart.js local:** cargado
+*   **SheetJS local:** cargado
+*   **Modo offline:** OK
+
+> [!TIP]
+> Si las librerías aparecen como "no cargado", asegúrese de haber ejecutado el comando `uploadfs` correctamente.
+
+---
+
+### 9. INTERPRETACIÓN DE RESULTADOS
+
+A través del HMI y los datos exportados en XLSX, el grupo identificará:
+
+*   **PWM Mínimo de Arranque:** Identificación de la zona muerta del agitador bajo carga.
+*   **Histéresis Mecánica:** Comparación de rampas ascendentes y descendentes del motor TT.
+*   **Constante de Tiempo (Tau):** Inercia térmica del reactor identificada al 63.2% del ascenso.
+*   **Tiempo Muerto (Theta):** Retardo de transporte entre la resistencia y el sensor DS18B20.
+
+---
+### 10. Flujo de calibración manual de voltaje
+
+Para **voltaje_pwm255_v**:
+
+1. Abrir la interfaz web del ESP32 en el navegador.
+2. Deslizar el control de **AGITADOR (RPM)** hasta el valor máximo (**255**).
+3. Medir con un multímetro el voltaje real en los bornes del motor (salida del L298N).
+4. Ingresar ese valor en el formulario de metadata del HMI (ej. 9.25V).
+5. Regresar el slider a **0** para detener el motor.
+
+Estos voltajes son metadata del ensayo para compensar la caída de tensión interna del driver y no se usan como columnas repetidas por fila en el archivo de datos.
+
+---
+
+
+### 11. Prueba manual de motor y resistencia
+
+La interfaz web permite validar el cableado básico del sistema antes de realizar la caracterización automática:
+
+1. Deslizar el control de **AGITADOR (RPM)** entre **0 y 255**.
+2. Verificar el giro físico del motor y la formación de turbulencia en el fluido.
+3. Deslizar el control de **Potencia Térmica** (Ciclo de trabajo del SSR).
+4. Verificar visualmente SSR se active y comience el calentamiento.
+5. Regresar ambos sliders a la posición **0** para confirmar el apagado inmediato.
+
+Si el flujo del fluido no es ascendente/descendente según el diseño de la hélice, intercambiar los cables del motor en las salidas del driver L298N.
+
+---
+
+
+### 12. Timeout de seguridad en modo manual y calibración
+
+Esta protección evita que el motor o la resistencia queden encendidos indefinidamente si el usuario pierde la conexión con el punto de acceso WiFi o cierra el navegador sin detener los sliders.
+
+Valores por defecto en el firmware:
+
+**bool HABILITAR_TIMEOUT_SEGURIDAD = true;**
+**unsigned long TIMEOUT_SISTEMA_MS = 30000;** (30 segundos)
+
+**Comportamiento:**
+
+*   Aplica para cualquier nivel de agitación o potencia térmica activada por slider.
+*   Si el ESP32 no recibe una actualización de datos desde la web en el tiempo configurado, ejecuta una parada real:
+    *   **PWM = 0** (Pin 25)
+    *   **Pines IN1/IN2 = LOW** (Pines 26 y 27)
+    *   **SSR_CONTROL = LOW** (Pin 18)
+*   Se registra el evento **"Parada de emergencia por pérdida de señal"** en la metadata.
+*   El usuario debe reconectar y refrescar la web para retomar el control.
+
+**Importante:** Esta protección es una capa lógica de seguridad y no sustituye al botón físico de desconexión de la red eléctrica de 110V.
+
+---
+
+
+### 13. Prueba de encoder (Retroalimentación)
+
+La sección de monitoreo de RPM permite validar la señal del sensor FC-03 mediante interrupciones en tiempo real:
+
+1. Hacer girar el motor desplazando el slider de agitación.
+2. Verificar el panel numérico **AGITADOR (RPM)** en el HMI.
+3. Revisar que la gráfica de velocidad (curva azul) muestre el comportamiento dinámico.
+
+**Valores esperados:**
+
+*   **Con movimiento:** el valor de **pulsos** debe aumentar y las **RPM** deben ser mayores a 0.
+*   **Detenido:** el valor de **RPM** debe ser exactamente 0.
+*   Si hay movimiento pero las RPM marcan 0, verificar la alineación del disco de ranuras y que la alimentación del sensor sea de **3.3V**.
+
+---
+
+### 14. Ejecución de caracterización
+
+La caracterización completa del reactor sigue una secuencia lógica de pasos para validar ambos subsistemas:
+
+1. **Rampa de agitación ascendente:** (0, 20, 40, 60, 80, 100% PWM).
+2. **Estabilización mecánica:** Pausa de 5 segundos en cada escalón para lectura estacionaria.
+3. **Rampa de agitación descendente:** (100 a 0% PWM) para identificar histéresis.
+4. **Pausa de equilibrio:** Regreso a temperatura ambiente y volumen estandarizado (2L o 3L).
+5. **Escalón térmico:** Activación de la resistencia al 100% de potencia con agitación constante.
+6. **Stop final:** Detención automática al alcanzar el límite de seguridad (40°C).
+
+---
+
+**Procedimiento:**
+
+1. Completar el formulario de carga (Volumen de agua y tipo de aspa).
+2. Deslizar el slider de agitación para iniciar la rampa mecánica.
+3. Registrar los valores de voltaje y corriente en cada punto de operación.
+4. Iniciar la prueba térmica y observar la curva de respuesta en tiempo real.
+5. Al terminar, descargar el archivo EXEL con las lecturas para el procesamiento en MATLAB.
+
+La cancelación manual en cualquier punto debe poner a cero los pines `PWM` y `SSR_CONTROL` de forma inmediata.
+
+---
+
+### 15. Interpretación de resultados
+
+#### PWM mínimo de arranque (Zona Muerta)
+El valor de `pwm_muerto` representa el primer nivel de PWM donde el agitador vence la fricción estática de la caja reductora y la resistencia viscosa del agua. Sirve para definir el umbral inferior de control en el código.
+
+#### Histéresis mecánica
+Aparece cuando las RPM de la rampa ascendente no coinciden con las de la rampa descendente para un mismo PWM. En nuestro motor TT, esto permite cuantificar el juego mecánico y el esfuerzo del aspa bajo carga.
+
+#### Ganancia del proceso (K)
+Calculada como `(Temp_final - Temp_inicial) / Potencia_SSR`. Indica cuántos grados centígrados aumenta el reactor por cada 1% de incremento en la potencia térmica. En este proyecto se identificó un valor nominal de **0.18 C/%**.
+
+#### Constante de tiempo (Tau)
+Representa la inercia térmica del fluido. Es el tiempo necesario para alcanzar el **63.2%** del incremento total de temperatura. Este valor cambia significativamente entre la carga de 2L (**92s**) y la de 3L (**135s**).
+
+#### Tiempo muerto (Theta)
+Es el retardo de transporte detectado entre el encendido de la resistencia y el inicio del ascenso sostenido en el sensor DS18B20. En nuestro sistema oscila entre **6 y 7 segundos** debido a la ubicación del sensor.
+
+#### Eficiencia por Agitación (Coeficiente U)
+Comparar la prueba al 50% vs 100% de agitación permite observar la reducción del gradiente térmico espacial. Una mayor velocidad de mezcla reduce el tiempo muerto y mejora la homogeneidad del lote farmacéutico.
+
+---
+
+### 16. Parámetros principales del formulario
+
+* **id_ensayo**: Identificador único del lote o prueba (ej. Ensayo_2L_AspaLigera).
+* **voltaje_vcc**: Voltaje real medido manualmente en bornes a PWM 255.
+* **volumen_l**: Carga de fluido utilizada (estandarizado en 2.0 o 3.0 litros).
+* **pulsos_por_vuelta**: Configurado en 20 para el disco del encoder FC-03.
+* **paso_pwm**: Incremento entre escalones de la rampa (ej. 20 unidades).
+* **tiempo_estabilizacion_ms**: Tiempo de espera para alcanzar estado estacionario mecánico.
+* **temp_seguridad**: Límite de corte automático (40°C para proteger el polímero).
+* **muestras_promedio**: Cantidad de lecturas de temperatura para filtrar ruido.
+
+---
+
+### 17. Pruebas por etapas
+
+Usa esta secuencia para validar el sistema antes de confiar en los datos de caracterización:
+
+**Etapa 1: Compilar proyecto limpio**
+Ejecutar `pio run`. Esperado: Compilación exitosa de las librerías OneWire y AsyncWebServer.
+
+**Etapa 2: Subir sistema de archivos LittleFS**
+Ejecutar `pio run --target uploadfs`. Esperado: Los archivos `index.html` y las librerías de gráficas quedan disponibles en la flash del ESP32.
+
+**Etapa 3: Validar WiFi y Punto de Acceso**
+Subir firmware y buscar la red "Reactor_Batch_G5". Esperado: Conexión exitosa e IP `192.168.4.1` accesible.
+
+**Etapa 4: Probar agitador (Slider)**
+Mover el slider de 0 a 100. Esperado: El motor inicia giro al vencer la zona muerta (~25 PWM).
+
+**Etapa 5: Probar sensor de temperatura DS18B20**
+Sumergir el sensor y verificar lectura ambiental. Esperado: Gráfica roja con valores coherentes (aprox. 22-25°C).
+
+**Etapa 6: Probar disparo del SSR**
+Activar el slider de potencia térmica brevemente. Esperado: LED del SSR encendido y leve incremento de temperatura en la zona del fondo.
+
+**Etapa 7: Ejecutar caracterización mecánica corta**
+Usar un `paso_pwm = 50`. Esperado: Validación rápida de la captura de RPM y generación de gráfica de escalones.
+
+**Etapa 8: Ejecutar caracterización térmica nominal**
+Iniciar prueba con 2L de agua. Esperado: Curva de respuesta tipo primer orden (FOPDT) y exportación de datos exitosa.
+
+---
+
+### 18. Reproducibilidad desde cero
+
+Para reproducir este proyecto:
+
+1. Clonar el repositorio.
+2. Configurar pines y credenciales en `include/config.h`.
+3. Colocar las librerías `chart.umd.min.js` y `xlsx.full.min.js` en la carpeta `/data`.
+4. Ejecutar `pio run` (Compilar).
+5. Ejecutar `pio run --target upload` (Subir código).
+6. Ejecutar `pio run --target uploadfs` (Subir interfaz web).
+7. Abrir el navegador en `192.168.4.1`.
+8. Realizar calibración manual de voltaje máximo.
+9. Ejecutar pruebas por etapas.
+10. Descargar archivo CSV/XLSX para análisis dinámico.
+
+---
+
+### 19. Mantenibilidad del código
+
+El firmware está organizado por bloques funcionales para facilitar futuras mejoras:
+
+* **WiFi SoftAP**: Gestión del punto de acceso independiente de internet.
+* **Servidor Web Asíncrono**: Manejo de peticiones HTTP sin bloquear el lazo de control.
+* **Control de Agitación**: Lógica de PWM mediante el driver L298N.
+* **Control Térmico (SSR)**: Gestión de potencia mediante ventana de tiempo.
+* **Bus One-Wire**: Lectura digital multivariable de temperatura.
+* **Interrupciones Externas**: Conteo de pulsos de alta precisión para el cálculo de RPM.
+* **Telemetría JSON**: Formateo de datos en tiempo real para el HMI.
+
+La intención es mantener el código modular, permitiendo que otros grupos puedan integrar sensores adicionales (como pH o turbidez) o implementar un control PID de lazo cerrado sobre esta misma base de identificación.
