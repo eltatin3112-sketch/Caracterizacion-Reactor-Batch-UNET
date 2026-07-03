@@ -1,6 +1,8 @@
 # CARACTERIZADOR DINAMICO: REACTOR BATCH G5
 ## Identificacion Experimental de Mezcla y Transferencia Termica
 
+Elaborado por: Yermey Castro y Daniel Torres
+
 ---
 
 ### 1. OBJETIVO DEL PROYECTO
