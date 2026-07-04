@@ -69,7 +69,7 @@ Pines asignados en el firmware para el controlador **ESP32 DevKit V1**:
 > * **NO** alimentar el encoder FC-03 con 5V si se conecta al ESP32 (usar estrictamente 3.3V).
 > * **NO** conectar la resistencia de 110V AC directamente al ESP32 o a la protoboard.
 > * **NO** omitir el nodo de tierra común (GND) entre la fuente ATX y el ESP32.
-> * **NO** encender la resistencia de inmersión si el sensor ultrasónico indica bajo nivel de fluido.
+> * **NO** encender la resistencia de inmersión si no hay liquido en el tanque. 
 > * **NO** utilizar los pines GPIO 6 al 11, ya que están integrados a la memoria flash del ESP32.
 
 ---
